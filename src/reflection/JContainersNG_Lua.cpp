@@ -57,7 +57,10 @@ namespace JContainersNG::Lua {
             lua_pushnil(L);
         }
         else if (j.is_boolean()) {
-            lua_pushboolean(L, j.get<bool>());
+            // JContainers has no bool type — OG normalizes to int 1/0. if lua
+            // ever sees a real bool, checks like 'hidden == 0' quietly never
+            // match (false ~= 0) and MSM's presence detection lies
+            lua_pushinteger(L, j.get<bool>() ? 1 : 0);
         }
         else if (j.is_number_integer()) {
             lua_pushinteger(L, j.get<lua_Integer>());
@@ -96,7 +99,11 @@ namespace JContainersNG::Lua {
         int t = lua_type(L, idx);
         switch (t) {
         case LUA_TNIL:       return json(nullptr);
-        case LUA_TBOOLEAN:   return json(lua_toboolean(L, idx) != 0);
+        case LUA_TBOOLEAN:
+            // same normalization on the way out: lua true/false become int
+            // 1/0, so writeToFile never emits "hidden": false and the next
+            // session's comparisons still work
+            return json(lua_toboolean(L, idx) ? 1 : 0);
         case LUA_TNUMBER:
             if (lua_isinteger(L, idx)) return json(lua_tointeger(L, idx));
             return json(lua_tonumber(L, idx));
@@ -182,7 +189,7 @@ namespace JContainersNG::Lua {
         // we keep a private loadfile ref for jrequire BEFORE killing the globals.
         // also unpack moved to table.unpack in 5.4 — alias it so 5.1-era (LuaJIT)
         // scripts dont die. jc subset = the pure-table helpers from OG's jc lib.
-        static const char* kPrelude = R"(
+        static const char* kPrelude = R"PRELUDE(
             local _loadfile = loadfile  -- jrequire's private key, globals get axed below
 
             os.execute = nil
@@ -218,20 +225,24 @@ namespace JContainersNG::Lua {
             function jc.less(than) return function(x) return x < than end end
             function jc.greater(than) return function(x) return x > than end end
 
-            -- OG module system, fresh-state edition: no cache (state dies per eval),
-            -- mods like CSM load once per menu open so re-reading the file is free.
-            -- 'jc' short-circuits to our helpers since real mods cargo-cult that line
+            -- OG module loader with cache (their user_modules). persistent state
+            -- means the cache survives between evals, so each mod loads once per
+            -- session. missing file = nil (OG behavior), syntax/runtime error
+            -- still blows up loud in the log
+            local _moduleCache = {}
             function jrequire(name)
                 if name == 'jc' then return jc end
+                if _moduleCache[name] ~= nil then return _moduleCache[name] end
                 local rel = name:gsub('%.', '/')
-                local chunk, err = _loadfile(JC_LUA_PATH .. rel .. '/init.lua')
+                local chunk = _loadfile(JC_LUA_PATH .. rel .. '/init.lua')
                 if not chunk then
-                    chunk, err = _loadfile(JC_LUA_PATH .. rel .. '.lua')
+                    chunk = _loadfile(JC_LUA_PATH .. rel .. '.lua')
                 end
-                if not chunk then error("jrequire: cant load '" .. name .. "': " .. tostring(err)) end
-                return chunk()
+                if not chunk then return nil end
+                local mod = chunk()
+                _moduleCache[name] = mod
+                return mod
             end
-
             -- JC object constructors, plain-table flavor. our PullJsonFromLua turns
             -- any returned table into a real JObject, so lua code never needs the
             -- FFI handle dance OG did. metatable marks intent + future-proofs us
@@ -246,7 +257,22 @@ namespace JContainersNG::Lua {
                 object = function() return mkcontainer('array') end,
             }
             JValue = {}
-        )";
+            -- OG's killer trick, straight from InternalLuaScripts/init.lua sandbox_2:
+            -- eval scripts run in an env where ANY unknown global is treated as a
+            -- module name and lazy-loaded from JCData/lua/<name>/init.lua. this is
+            -- how CSM's eval of msm.truncateV3(jobject) resolves 'msm' despite the
+            -- papyrus never requiring anything.failed lookups land nil(OG parity),
+            --so ordinary typos dont explode either
+            __jc_eval_env = setmetatable({}, {
+                __index = function(_, key)
+                    local v = rawget(_G, key)
+                    if v ~= nil then return v end
+                    local ok, mod = pcall(jrequire, key)
+                    if ok then return mod end
+                    return nil
+                end,
+                })
+                )PRELUDE";
         // prelude + module path run ONCE per session now that the state
         // persists. re-running wouldnt hurt the sandbox, but it WOULD stomp
         // globals mods set up for themselves (msm & friends) — which is the
@@ -287,15 +313,25 @@ namespace JContainersNG::Lua {
         lua_setglobal(L, "jobject");
 
         bool ok = false;
-        if (luaL_dostring(L, luaCode.c_str()) == LUA_OK) {
-            if (extractResult) {
-                extractResult(L);
+        if (luaL_loadstring(L, luaCode.c_str()) == LUA_OK) {
+            // swap the chunk's _ENV for our module-resolving env — this is the
+            // half of OG's sandbox we were missing, bare 'msm' loads on demand
+            lua_getglobal(L, "__jc_eval_env");
+            lua_setupvalue(L, -2, 1);
+            if (lua_pcall(L, 0, 1, 0) == LUA_OK) {
+                if (extractResult) {
+                    extractResult(L);
+                }
+                ok = true;
             }
-            ok = true;
+            else {
+                const char* err = lua_tostring(L, -1);
+                SKSE::log::error("JContainersNG Lua eval error: {}", err ? err : "unknown");
+            }
         }
         else {
             const char* err = lua_tostring(L, -1);
-            SKSE::log::error("JContainersNG Lua eval error: {}", err ? err : "unknown");
+            SKSE::log::error("JContainersNG Lua compile error: {}", err ? err : "unknown");
         }
 
         // no lua_close — the state lives for the whole session. the stack gets

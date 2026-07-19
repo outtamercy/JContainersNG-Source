@@ -7,6 +7,9 @@ float JLua_EvalLuaFlt(RE::StaticFunctionTag*, std::string luaCode, Handle transp
         if (lua_isnumber(L, -1)) {
             result = static_cast<float>(lua_tonumber(L, -1));
         }
+        else if (lua_isboolean(L, -1)) {
+            result = lua_toboolean(L, -1) ? 1.0f : 0.0f;
+        }
         });
     if (minimizeLifetime) {
         JValue_ZeroLifetime(nullptr, transport);
@@ -19,6 +22,11 @@ int32_t JLua_EvalLuaInt(RE::StaticFunctionTag*, std::string luaCode, Handle tran
     bool ok = JContainersNG::Lua::EvaluateLuaExpression(luaCode, transport, [&](lua_State* L) {
         if (lua_isnumber(L, -1)) {
             result = static_cast<int32_t>(lua_tonumber(L, -1));
+        }
+        else if (lua_isboolean(L, -1)) {
+            // OG returnJCValue: lua bool -> int 1/0. without this,
+            // "return msm.checkAnyUnhidden(jobject)" eats defaultVal forever
+            result = lua_toboolean(L, -1) ? 1 : 0;
         }
         });
     if (minimizeLifetime) {

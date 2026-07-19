@@ -121,6 +121,14 @@ inline float JCGetFlt(const json& val, float defaultVal = 0.0f) {
 inline bool JCStrEqualsCI(const std::string& a, const std::string& b) {
     return _stricmp(a.c_str(), b.c_str()) == 0;
 }
+// OG stores tags/pool names as istring — case-insensitive. our side-tables are
+// plain unordered_maps, so we fold keys at the boundary and "Quests" == "quests"
+inline std::string JCFoldCase(const std::string& s) {
+    std::string out = s;
+    std::transform(out.begin(), out.end(), out.begin(),
+        [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return out;
+}
 
 // OG item equality: same types only, strings case-insensitive, refs by handle.
 // numbers do NOT cross-compare (int 3 != float 3.0 in strict equality land)

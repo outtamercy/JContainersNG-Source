@@ -118,16 +118,34 @@ namespace JContainersNG::Lua {
         }
     }
 
-    // Core pipeline. Fresh Lua state per eval, maps transport JMap to global 'args'.
-    // extractResult lambda reads the return value off the stack.
+    // Core pipeline. PERSISTENT Lua state, OG parity: mods like CSM/MSM load a
+    // module once (msm = jrequire 'msm') and expect its globals to exist in
+    // every later eval — fresh-state-per-eval made that impossible and was the
+    // real CSM test failure. one state per session, created lazily, NEVER
+    // closed (process teardown reclaims it; closing at dll detach is crash
+    // bait). mutex because papyrus can hit natives from multiple VM threads.
+    static lua_State* GetOrCreateState() {
+        static lua_State* L = [] {
+            lua_State* s = lua_newstate(SkyrimLuaAlloc, nullptr);
+            if (s) luaL_openlibs(s);
+            return s;
+            }();
+        return L;
+    }
+
     bool EvaluateLuaExpression(const std::string& luaCode, Handle transportHandle, std::function<void(lua_State*)> extractResult) {
-        lua_State* L = lua_newstate(SkyrimLuaAlloc, nullptr);
+        static std::mutex s_luaMutex;
+        std::lock_guard<std::mutex> lock(s_luaMutex);
+
+        lua_State* L = GetOrCreateState();
         if (!L) {
             SKSE::log::error("JContainersNG Lua: failed to create state");
             return false;
         }
 
-        luaL_openlibs(L);
+        // persistent state = persistent stack. wipe whatever the last eval
+        // left behind (return values, error strings) before we push anything
+        lua_settop(L, 0);
 
         // OG sandboxed eval scripts for a reason: openlibs hands out os.execute and
         // package/loadlib, i.e. arbitrary dll loading from papyrus-visible lua.
@@ -205,13 +223,22 @@ namespace JContainersNG::Lua {
             }
             JValue = {}
         )";
-        luaL_dostring(L, kPrelude); // our own string, cant fail — no check needed
+        // prelude + module path run ONCE per session now that the state
+        // persists. re-running wouldnt hurt the sandbox, but it WOULD stomp
+        // globals mods set up for themselves (msm & friends) — which is the
+        // whole point of keeping the state alive
+        static bool s_preludeDone = false;
+        if (!s_preludeDone) {
+            luaL_dostring(L, kPrelude); // our own string, cant fail — no check needed
 
-        // where jrequire hunts modules. matches the user:/ root + lua/ subdir,
-        // same layout OG ships (JCData/lua/<mod>/init.lua)
-        static const std::string kLuaModulePath = "Data/SKSE/Plugins/JCData/lua/";
-        lua_pushlstring(L, kLuaModulePath.c_str(), kLuaModulePath.size());
-        lua_setglobal(L, "JC_LUA_PATH");
+            // where jrequire hunts modules. matches the user:/ root + lua/
+            // subdir, same layout OG ships (JCData/lua/<mod>/init.lua)
+            static const std::string kLuaModulePath = "Data/SKSE/Plugins/JCData/lua/";
+            lua_pushlstring(L, kLuaModulePath.c_str(), kLuaModulePath.size());
+            lua_setglobal(L, "JC_LUA_PATH");
+
+            s_preludeDone = true;
+        }
 
         // transport handle -> args table. nothing pushed this before, so args
         // (and jobject via the alias below) was always nil — every evalLua
@@ -247,7 +274,9 @@ namespace JContainersNG::Lua {
             SKSE::log::error("JContainersNG Lua eval error: {}", err ? err : "unknown");
         }
 
-        lua_close(L);
+        // no lua_close — the state lives for the whole session. the stack gets
+        // wiped by settop at the top of the next call, so a leaky script cant
+        // grow it forever
         return ok;
     }
 

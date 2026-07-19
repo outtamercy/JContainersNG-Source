@@ -10,6 +10,13 @@
 
 using json = nlohmann::json;
 
+// lives in JContainersNG_Internal.cpp (which includes this header, so we
+// declare instead of include). WalkPath needs the same CI key lookup the
+// rest of the plugin uses — OG's istring maps resolve refs case-blind too.
+// MUST stay at global scope — inside the namespace it declares a different
+// function and the linker goes home empty-handed (LNK2019, ask me how I know)
+json::iterator FindKeyCI(json& j, const std::string& key);
+
 namespace JsonSerializer {
 
     // OG writes "__metaInfo":{"typeName":"JFormMap"|"JIntMap"} so readers can
@@ -238,8 +245,10 @@ namespace JsonSerializer {
                 if (path[pos] == '.') {
                     size_t end = path.find_first_of(".[", pos + 1);
                     std::string key = path.substr(pos + 1, end == std::string::npos ? end : end - pos - 1);
-                    if (!ptr->is_object() || !ptr->contains(key)) return ObjectManager::INVALID_HANDLE;
-                    if (!FollowRef((*ptr)[key], current)) return ObjectManager::INVALID_HANDLE;
+                    if (!ptr->is_object()) return ObjectManager::INVALID_HANDLE;
+                    auto kit = FindKeyCI(*ptr, key);
+                    if (kit == ptr->end()) return ObjectManager::INVALID_HANDLE;
+                    if (!FollowRef(kit.value(), current)) return ObjectManager::INVALID_HANDLE;
                     pos = (end == std::string::npos) ? path.size() : end;
                 }
                 else if (path[pos] == '[') {
@@ -248,8 +257,10 @@ namespace JsonSerializer {
                     std::string inner = path.substr(pos + 1, close - pos - 1);
 
                     if (FormSerializer::IsFormString(inner)) {
-                        if (!ptr->is_object() || !ptr->contains(inner)) return ObjectManager::INVALID_HANDLE;
-                        if (!FollowRef((*ptr)[inner], current)) return ObjectManager::INVALID_HANDLE;
+                        if (!ptr->is_object()) return ObjectManager::INVALID_HANDLE;
+                        auto kit = FindKeyCI(*ptr, inner);
+                        if (kit == ptr->end()) return ObjectManager::INVALID_HANDLE;
+                        if (!FollowRef(kit.value(), current)) return ObjectManager::INVALID_HANDLE;
                     }
                     else {
                         std::int32_t idx;

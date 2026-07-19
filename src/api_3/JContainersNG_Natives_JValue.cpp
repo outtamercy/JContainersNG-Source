@@ -48,7 +48,7 @@ Handle JValue_Retain(RE::StaticFunctionTag*, Handle obj, std::string tag) {
     ObjectManager::Get().Retain(obj, RefDomain::TES);
     if (!tag.empty()) {
         std::lock_guard<std::mutex> lock(g_tagMutex);
-        g_tags[tag].insert(obj);
+        g_tags[JCFoldCase(tag)].insert(obj);
     }
     return obj;
 }
@@ -64,7 +64,7 @@ Handle JValue_ReleaseAndRetain(RE::StaticFunctionTag*, Handle previous, Handle n
         ObjectManager::Get().Retain(newObj, RefDomain::TES);
         if (!tag.empty()) {
             std::lock_guard<std::mutex> lock(g_tagMutex);
-            g_tags[tag].insert(newObj);
+            g_tags[JCFoldCase(tag)].insert(newObj);
         }
     }
     return newObj;
@@ -72,7 +72,7 @@ Handle JValue_ReleaseAndRetain(RE::StaticFunctionTag*, Handle previous, Handle n
 
 void JValue_ReleaseObjectsWithTag(RE::StaticFunctionTag*, std::string tag) {
     std::lock_guard<std::mutex> lock(g_tagMutex);
-    auto it = g_tags.find(tag);
+    auto it = g_tags.find(JCFoldCase(tag));
     if (it == g_tags.end()) return;
     for (auto h : it->second) {
         // drain every TES ref the tag piled up — Internal edges and root pins

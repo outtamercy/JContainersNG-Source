@@ -305,7 +305,8 @@ std::string JAtomic_compareExchangeStr(RE::StaticFunctionTag*, Handle obj, std::
 
     if (!target->is_string()) return "";
     std::string prev = target->get<std::string>();
-    if (prev == expected) *target = desired;
+    // OG item equality is _stricmp for strings — CAS matches CI like everything else
+    if (JCStrEqualsCI(prev, expected)) *target = desired;
     return prev;
 }
 

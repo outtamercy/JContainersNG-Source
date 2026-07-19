@@ -27,8 +27,32 @@ namespace JContainersNG::Lua {
         return realloc(ptr, nsize);
     }
 
-    // Shove a json tree onto the Lua stack recursively
-    static void PushJsonToLua(lua_State* L, const json& j) {
+    // Shove a json tree onto the Lua stack recursively. resolves __jc_ref
+    // markers as it goes — lua sees the DATA, not our handle plumbing. without
+    // this, transports built from readFromDirectory/readFromFile (maps/arrays
+    // of refs) hand scripts a pile of {__jc_ref = N} tables and every field
+    // lookup quietly nils out. thats what silently emptied MSM's menu data
+    static void PushJsonToLua(lua_State* L, const json& j, int depth = 0) {
+        // depth guard stands in for cycle detection — a ref cycle would
+        // recurse forever, so anything past 32 hops gets nil'ed. OG tracks
+        // visited handles; for eval transports this is plenty of rope
+        if (depth > 32) {
+            lua_pushnil(L);
+            return;
+        }
+
+        // ref marker? chase it and push the real object instead
+        ObjectManager::Handle refHandle;
+        if (ObjectManager::IsRef(j, &refHandle)) {
+            auto refPtr = ObjectManager::Get().GetObject(refHandle);
+            if (!refPtr) {
+                lua_pushnil(L);
+                return;
+            }
+            PushJsonToLua(L, *refPtr, depth + 1);
+            return;
+        }
+
         if (j.is_null()) {
             lua_pushnil(L);
         }
@@ -49,7 +73,7 @@ namespace JContainersNG::Lua {
             lua_newtable(L);
             int index = 1; // Lua arrays start at 1, because why not
             for (const auto& element : j) {
-                PushJsonToLua(L, element);
+                PushJsonToLua(L, element, depth + 1);
                 lua_rawseti(L, -2, index++);
             }
         }
@@ -57,7 +81,7 @@ namespace JContainersNG::Lua {
             lua_newtable(L);
             for (auto it = j.begin(); it != j.end(); ++it) {
                 lua_pushlstring(L, it.key().c_str(), it.key().size());
-                PushJsonToLua(L, it.value());
+                PushJsonToLua(L, it.value(), depth + 1);
                 lua_rawset(L, -3);
             }
         }

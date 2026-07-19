@@ -1,3 +1,4 @@
+// --- Serialization.cpp
 #include <SKSE/SKSE.h>
 #include <nlohmann/json.hpp>
 #include "ObjectManager.hpp"
@@ -6,9 +7,13 @@ using json = nlohmann::json;
 using Handle = ObjectManager::Handle;
 
 constexpr std::uint32_t kJContainersRecord = 'JCON';
-constexpr std::uint32_t kVersion = 2;
+constexpr std::uint32_t kVersion = 3; // v3: persists tes refcounts (OG persisted them too)
 
 void SaveCallback(SKSE::SerializationInterface* a_intfc) {
+    ObjectManager::Get().SweepDeadObjects();
+    if (ObjectManager::Get().AreFormsDirty()) {
+        ObjectManager::Get().SweepDeadForms();
+    }
     SKSE::log::info("JContainersNG: save callback triggered");
 
     json saveDoc;
@@ -24,6 +29,16 @@ void SaveCallback(SKSE::SerializationInterface* a_intfc) {
         }
     }
     saveDoc["registry"] = registry;
+
+    // OG saved _tes_refCount per object, and for good reason: Papyrus script
+    // properties holding these handles persist in the same save file, so a
+    // retained handle MUST survive the round trip or the mod's object gets
+    // eaten by the next GC while the script is still pointing at it
+    json tesRefs = json::object();
+    for (const auto& [h, count] : ObjectManager::Get().GetTesRefCounts()) {
+        tesRefs[std::to_string(h)] = count;
+    }
+    saveDoc["tesRefs"] = tesRefs;
 
     std::string payload = saveDoc.dump();
     std::size_t len = payload.size();
@@ -55,8 +70,8 @@ void LoadCallback(SKSE::SerializationInterface* a_intfc) {
     while (a_intfc->GetNextRecordInfo(type, version, length)) {
         if (type != kJContainersRecord) continue;
 
-        if (version != kVersion) {
-            SKSE::log::warn("JContainersNG: co-save version {} != {}, skipping", version, kVersion);
+        if (version != 2 && version != 3) {
+            SKSE::log::warn("JContainersNG: co-save version {} unsupported, skipping", version);
             continue;
         }
 
@@ -88,6 +103,21 @@ void LoadCallback(SKSE::SerializationInterface* a_intfc) {
                 ObjectManager::Get().RestoreObject(h, val);
             }
 
+            // edges are the ground truth — rebuild Internal refs from the graph.
+            // this zeroes ALL counters first, so order matters:
+            // edges -> tes counts -> root pin
+            ObjectManager::Get().RebuildEdgeRefs();
+
+            // v3: put the tes refcounts back. retained handles survive the load,
+            // same as OG. v2 saves have no tesRefs — v2 never had working
+            // lifetime anyway, nothing worth preserving is lost
+            if (version >= 3 && saveDoc.contains("tesRefs") && saveDoc["tesRefs"].is_object()) {
+                for (auto& [key, val] : saveDoc["tesRefs"].items()) {
+                    Handle h = static_cast<Handle>(std::stoul(key));
+                    ObjectManager::Get().RestoreTesRefCount(h, val.get<int>());
+                }
+            }
+
             if (saveDoc.contains("nextHandle")) {
                 ObjectManager::Get().SetNextHandle(saveDoc["nextHandle"].get<Handle>());
             }
@@ -95,6 +125,12 @@ void LoadCallback(SKSE::SerializationInterface* a_intfc) {
             if (saveDoc.contains("jdbRoot")) {
                 ObjectManager::Get().SetJDBRoot(saveDoc["jdbRoot"].get<Handle>());
             }
+
+            // G4: a load can mean uninstalled mods — dead forms wont fire
+            // TESFormDeleteEvent, they just stop resolving. flag the sweep so
+            // the first save after every load cleans the corpses. steady-state
+            // saves stay dirty-gated and cheap
+            ObjectManager::Get().MarkFormsDirty();
 
             SKSE::log::info("JContainersNG: restored {} objects", saveDoc["registry"].size());
         }
@@ -119,6 +155,7 @@ void LoadCallback(SKSE::SerializationInterface* a_intfc) {
         ObjectManager::Get().SetJDBRoot(root);
     }
 }
+
 
 void RevertCallback(SKSE::SerializationInterface*) {
     SKSE::log::info("JContainersNG: revert callback triggered");

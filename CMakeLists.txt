@@ -4,7 +4,8 @@ cmake_minimum_required(VERSION 3.21)
 # (AP's gate: GetPluginVersion("JContainers64"/"JContainersGOG"/"JContainersVR"), passes on ANY match)
 # "JContainers64" covers SE + GOG since GOG runs the same scripts, but VR mods
 # may specifically want "JContainersVR", so we name it right per-build
-if(VCPKG_TARGET_TRIPLET MATCHES "sksevr")
+option(BUILD_VR "Build for VR" OFF)
+if(BUILD_VR)
     project(JContainersVR VERSION 2.0.0 LANGUAGES CXX)
 else()
     project(JContainers64 VERSION 2.0.0 LANGUAGES CXX)
@@ -73,13 +74,6 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     lua_static
 )
 
-set(OUTPUT_FOLDER "H:/Mayhem's Madness AE/mods/JContainersNG")
-set(DLL_FOLDER "${OUTPUT_FOLDER}/SKSE/Plugins")
-
-add_custom_command(
-    TARGET ${PROJECT_NAME}
-    POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${DLL_FOLDER}
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:${PROJECT_NAME}> ${DLL_FOLDER}/${PROJECT_NAME}.dll
-    VERBATIM
+install(TARGETS ${PROJECT_NAME}
+    RUNTIME DESTINATION "SKSE/Plugins"
 )

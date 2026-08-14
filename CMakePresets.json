@@ -7,11 +7,11 @@
   },
   "configurePresets": [
     {
-      "name": "build-release-msvc",
-      "displayName": "Release (SE/AE)",
-      "description": "Optimized release build for Skyrim SE/AE/GOG.",
+      "name": "base",
+      "hidden": true,
       "generator": "Visual Studio 18 2026",
-      "binaryDir": "${sourceDir}/build/release-msvc",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "installDir": "${sourceDir}/install/${presetName}",
       "architecture": {
         "value": "x64",
         "strategy": "external"
@@ -22,32 +22,32 @@
       },
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
-        "CMAKE_TOOLCHAIN_FILE": "C:/Program Files/Microsoft Visual Studio/18/Insiders/VC/vcpkg/scripts/buildsystems/vcpkg.cmake",
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
         "VCPKG_HOST_TRIPLET": "x64-windows-skse",
         "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/cmake",
         "VCPKG_TARGET_TRIPLET": "x64-windows-skse"
       }
     },
     {
-      "name": "build-release-msvc-vr",
+      "name": "release-msvc",
+      "inherits": [
+        "base"
+      ],
+      "displayName": "Release (SE/AE)",
+      "description": "Optimized release build for Skyrim SE/AE/GOG.",
+      "cacheVariables": {
+        "BUILD_VR": "OFF"
+      }
+    },
+    {
+      "name": "release-msvc-vr",
+      "inherits": [
+        "base"
+      ],
       "displayName": "Release (VR)",
       "description": "Optimized release build for Skyrim VR.",
-      "generator": "Visual Studio 18 2026",
-      "binaryDir": "${sourceDir}/build/release-msvc-vr",
-      "architecture": {
-        "value": "x64",
-        "strategy": "external"
-      },
-      "toolset": {
-        "value": "host=x64",
-        "strategy": "external"
-      },
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release",
-        "CMAKE_TOOLCHAIN_FILE": "C:/Program Files/Microsoft Visual Studio/18/Insiders/VC/vcpkg/scripts/buildsystems/vcpkg.cmake",
-        "VCPKG_HOST_TRIPLET": "x64-windows-sksevr",
-        "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/cmake",
-        "VCPKG_TARGET_TRIPLET": "x64-windows-sksevr"
+        "BUILD_VR": "ON"
       }
     }
   ],
@@ -55,13 +55,13 @@
     {
       "name": "release-msvc",
       "displayName": "Release (MSVC)",
-      "configurePreset": "build-release-msvc",
+      "configurePreset": "release-msvc",
       "configuration": "Release"
     },
     {
       "name": "release-msvc-vr",
       "displayName": "Release VR (MSVC)",
-      "configurePreset": "build-release-msvc-vr",
+      "configurePreset": "release-msvc-vr",
       "configuration": "Release"
     }
   ]

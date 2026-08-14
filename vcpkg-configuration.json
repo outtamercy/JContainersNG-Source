@@ -7,8 +7,8 @@
   "registries": [
     {
       "kind": "git",
-      "repository": "https://github.com/Monitor221hz/modding-vcpkg-ports",
-      "baseline": "aa6db1d21b631042af707a8ff7a5ac2c8e42abd6",
+      "repository": "https://github.com/NOP-zz/modding-vcpkg-ports",
+      "baseline": "26d2adfa35a001d09954252c199550697ca22562",
       "packages": [
         "commonlibsse-ng-fork"
       ]

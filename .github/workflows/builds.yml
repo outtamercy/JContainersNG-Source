@@ -1,0 +1,47 @@
+name: builds
+
+on:
+  workflow_dispatch:
+  push:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        preset:
+          - release-msvc
+          - release-msvc-vr
+      max-parallel: 1 # ensure cached external builds can be used
+      fail-fast: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup MSVC Environment
+        uses: ilammy/msvc-dev-cmd@v1.10.0
+
+      - name: Restore vcpkg cache
+        id: vcpkg-cache
+        uses: TAServers/vcpkg-cache@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build
+        env:
+          VCPKG_FEATURE_FLAGS: "binarycaching"
+          VCPKG_BINARY_SOURCES: "clear;files,${{ steps.vcpkg-cache.outputs.path }},readwrite"
+        run: |
+          cmake --preset ${{ matrix.preset }} && cmake --build --preset ${{ matrix.preset }} && cmake --install build/${{ matrix.preset }}
+
+      - name: Create artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: "build-${{ matrix.preset }}"
+          path: "${{ github.workspace }}/install/${{ matrix.preset }}/"
+          if-no-files-found: error
+          overwrite: true

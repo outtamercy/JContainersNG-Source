@@ -1,17 +1,10 @@
 ﻿{
   "version": 3,
-  "cmakeMinimumRequired": {
-    "major": 3,
-    "minor": 21,
-    "patch": 0
-  },
   "configurePresets": [
     {
-      "name": "build-release-msvc",
-      "displayName": "Release (SE/AE)",
-      "description": "Optimized release build for Skyrim SE/AE/GOG.",
+      "name": "base",
+      "hidden": true,
       "generator": "Visual Studio 18 2026",
-      "binaryDir": "${sourceDir}/build/release-msvc",
       "architecture": {
         "value": "x64",
         "strategy": "external"
@@ -20,49 +13,88 @@
         "value": "host=x64",
         "strategy": "external"
       },
+      "binaryDir": "${sourceDir}/build/${presetName}",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_TOOLCHAIN_FILE": "C:/Program Files/Microsoft Visual Studio/18/Insiders/VC/vcpkg/scripts/buildsystems/vcpkg.cmake",
-        "VCPKG_HOST_TRIPLET": "x64-windows-skse",
         "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/cmake",
-        "VCPKG_TARGET_TRIPLET": "x64-windows-skse"
+        "BUILD_TESTS": "OFF",
+        "ENABLE_SKYRIM_TESTS": "OFF",
+        "BUILD_TESTING": "OFF"
       }
     },
     {
-      "name": "build-release-msvc-vr",
-      "displayName": "Release (VR)",
-      "description": "Optimized release build for Skyrim VR.",
-      "generator": "Visual Studio 18 2026",
-      "binaryDir": "${sourceDir}/build/release-msvc-vr",
-      "architecture": {
-        "value": "x64",
-        "strategy": "external"
-      },
-      "toolset": {
-        "value": "host=x64",
-        "strategy": "external"
-      },
+      "name": "release-msvc-se",
+      "displayName": "Release (SE/AE)",
+      "description": "Target Skyrim Special Edition / Anniversary Edition",
+      "inherits": "base",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
-        "CMAKE_TOOLCHAIN_FILE": "C:/Program Files/Microsoft Visual Studio/18/Insiders/VC/vcpkg/scripts/buildsystems/vcpkg.cmake",
+        "VCPKG_TARGET_TRIPLET": "x64-windows-skse",
+        "VCPKG_HOST_TRIPLET": "x64-windows-skse",
+        "JCNG_DEPLOY_FOLDER": "H:/Mayhem's Madness AE/mods/JContainersNG"
+      }
+    },
+    {
+      "name": "release-msvc-vr",
+      "displayName": "Release (VR)",
+      "description": "Target Skyrim VR",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "VCPKG_TARGET_TRIPLET": "x64-windows-sksevr",
         "VCPKG_HOST_TRIPLET": "x64-windows-sksevr",
-        "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/cmake",
-        "VCPKG_TARGET_TRIPLET": "x64-windows-sksevr"
+        "JCNG_DEPLOY_FOLDER": "H:/Mayhem's Madness VR/mods/JContainersNG"
+      }
+    },
+    {
+      "name": "debug-msvc-se",
+      "displayName": "Debug (SE/AE)",
+      "description": "Target Skyrim Special Edition / Anniversary Edition (Debug)",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "VCPKG_TARGET_TRIPLET": "x64-windows-skse",
+        "VCPKG_HOST_TRIPLET": "x64-windows-skse",
+        "JCNG_DEPLOY_FOLDER": "H:/Mayhem's Madness AE/mods/JContainersNG"
+      }
+    },
+    {
+      "name": "debug-msvc-vr",
+      "displayName": "Debug (VR)",
+      "description": "Target Skyrim VR (Debug)",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "VCPKG_TARGET_TRIPLET": "x64-windows-sksevr",
+        "VCPKG_HOST_TRIPLET": "x64-windows-sksevr",
+        "JCNG_DEPLOY_FOLDER": "H:/Mayhem's Madness VR/mods/JContainersNG"
       }
     }
   ],
   "buildPresets": [
     {
-      "name": "release-msvc",
-      "displayName": "Release (MSVC)",
-      "configurePreset": "build-release-msvc",
+      "name": "release-se",
+      "displayName": "Build SE Release",
+      "configurePreset": "release-msvc-se",
       "configuration": "Release"
     },
     {
-      "name": "release-msvc-vr",
-      "displayName": "Release VR (MSVC)",
-      "configurePreset": "build-release-msvc-vr",
+      "name": "release-vr",
+      "displayName": "Build VR Release",
+      "configurePreset": "release-msvc-vr",
       "configuration": "Release"
+    },
+    {
+      "name": "debug-se",
+      "displayName": "Build SE Debug",
+      "configurePreset": "debug-msvc-se",
+      "configuration": "Debug"
+    },
+    {
+      "name": "debug-vr",
+      "displayName": "Build VR Debug",
+      "configurePreset": "debug-msvc-vr",
+      "configuration": "Debug"
     }
   ]
 }

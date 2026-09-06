@@ -3,8 +3,11 @@
   "name": "jcontainersng",
   "version-string": "1.0.0",
   "dependencies": [
-    "commonlibsse-ng-fork",
-    "nlohmann-json"
+    "nlohmann-json",
+    "spdlog",
+    "fmt",
+    "directxtk",
+    "rapidcsv"
   ],
   "overrides": [
     {

@@ -1,5 +1,6 @@
 //Plugin.cpp
 #include <SKSE/SKSE.h>
+#include <string_view>
 #include "ObjectManager.hpp"
 #include "JContainersNG_Natives.hpp"
 
@@ -147,7 +148,7 @@ bool RegisterJContainersFunctions(RE::BSScript::IVirtualMachine* vm) {
     vm->RegisterFunction("objectFromPrototype", "JValue", JValue_ObjectFromPrototype, false);
     vm->RegisterFunction("writeToFile", "JValue", JValue_WriteToFile, false);
     vm->RegisterFunction("toString", "JValue", JValue_ToString, false);
-    vm->RegisterFunction("toJsonString", "JValue", JValue_ToString, false);
+    vm->RegisterFunction("toJsonString", "JValue", JValue_ToJsonString, false);
     vm->RegisterFunction("solvedValueType", "JValue", JValue_SolvedValueType, false);
     vm->RegisterFunction("hasPath", "JValue", JValue_HasPath, false);
     vm->RegisterFunction("solveFlt", "JValue", JValue_SolveFlt, false);
@@ -277,11 +278,17 @@ bool RegisterJContainersFunctions(RE::BSScript::IVirtualMachine* vm) {
     vm->RegisterFunction("encodeFormToString", "JString", JString_EncodeFormToString, false);
     vm->RegisterFunction("encodeFormIdToString", "JString", JString_EncodeFormIdToString, false);
     vm->RegisterFunction("generateUUID", "JString", JString_GenerateUUID, false);
+    vm->RegisterFunction("stoul", "JString", JString_Stoul, false);
 
     // JContainers
     vm->RegisterFunction("__isInstalled", "JContainers", JContainers_IsInstalled, false);
     vm->RegisterFunction("APIVersion", "JContainers", JContainers_APIVersion, false);
     vm->RegisterFunction("featureVersion", "JContainers", JContainers_FeatureVersion, false);
+    vm->RegisterFunction("minorVersion", "JContainers", JContainers_MinorVersion, false);
+    vm->RegisterFunction("patchVersion", "JContainers", JContainers_PatchVersion, false);
+    vm->RegisterFunction("versionInt", "JContainers", JContainers_VersionInt, false);
+    vm->RegisterFunction("versionString", "JContainers", JContainers_VersionString, false);
+    vm->RegisterFunction("versionAtLeast", "JContainers", JContainers_VersionAtLeast, false);
     vm->RegisterFunction("fileExistsAtPath", "JContainers", JContainers_FileExistsAtPath, false);
     vm->RegisterFunction("contentsOfDirectoryAtPath", "JContainers", JContainers_ContentsOfDirectoryAtPath, false);
     vm->RegisterFunction("removeFileAtPath", "JContainers", JContainers_RemoveFileAtPath, false);
@@ -339,6 +346,140 @@ static JCNG_API_V1 g_JContainersNGAPI_V1_Instance = {
     .jdb_root = JDB_Root,
 };
 
+// OG JContainers has a second, older DLL-to-DLL API. A few plugins (PL among
+// them) still grab this from the post-post-load broadcast before Papyrus ever
+// gets a chance to run. Keep its layout byte-for-byte boring.
+namespace LegacyJC {
+    constexpr uint32_t kRootInterfaceMessage = 1;
+
+    struct RootInterface {
+        uint32_t currentVersion;
+        const void* (*queryInterface)(uint32_t id);
+    };
+
+    struct ReflectionInterface {
+        uint32_t currentVersion;
+        void* (*functionOfClass)(const char* functionName, const char* className);
+    };
+
+    struct DomainInterface {
+        uint32_t currentVersion;
+        void* (*defaultDomain)();
+        void* (*domainWithName)(const char* domainName);
+    };
+
+    // The NG natives are stateless. Legacy callers still pass a domain as the
+    // first argument, so hand them a stable non-null token and safely ignore it.
+    static uint8_t g_defaultDomainToken = 0;
+
+    void* GetDefaultDomain() {
+        return &g_defaultDomainToken;
+    }
+
+    void* GetDomainWithName(const char*) {
+        return GetDefaultDomain();
+    }
+
+    void* FunctionOfClass(const char* functionName, const char* className) {
+        if (!functionName || !className) return nullptr;
+        const std::string_view function{ functionName };
+        const std::string_view klass{ className };
+
+        // These retain OG's domain-first ABI exactly: the first pointer is
+        // ignored by NG's StaticFunctionTag* natives. String-taking entries
+        // deliberately stay out until they have explicit const-char adapters.
+        if (klass == "JArray") {
+            if (function == "object") return reinterpret_cast<void*>(JArray_Object);
+            if (function == "objectWithSize") return reinterpret_cast<void*>(JArray_ObjectWithSize);
+            if (function == "getInt") return reinterpret_cast<void*>(JArray_GetInt);
+            if (function == "getFlt") return reinterpret_cast<void*>(JArray_GetFlt);
+            if (function == "getObj") return reinterpret_cast<void*>(JArray_GetObj);
+            if (function == "getForm") return reinterpret_cast<void*>(JArray_GetForm);
+            if (function == "count") return reinterpret_cast<void*>(JArray_Count);
+            if (function == "clear") return reinterpret_cast<void*>(JArray_Clear);
+            if (function == "eraseIndex") return reinterpret_cast<void*>(JArray_EraseIndex);
+            if (function == "eraseRange") return reinterpret_cast<void*>(JArray_EraseRange);
+            if (function == "eraseInteger") return reinterpret_cast<void*>(JArray_EraseInteger);
+            if (function == "eraseFloat") return reinterpret_cast<void*>(JArray_EraseFloat);
+            if (function == "eraseObject") return reinterpret_cast<void*>(JArray_EraseObject);
+            if (function == "eraseForm") return reinterpret_cast<void*>(JArray_EraseForm);
+            if (function == "valueType") return reinterpret_cast<void*>(JArray_ValueType);
+            if (function == "swapItems") return reinterpret_cast<void*>(JArray_SwapItems);
+            if (function == "sort") return reinterpret_cast<void*>(JArray_Sort);
+            if (function == "unique") return reinterpret_cast<void*>(JArray_Unique);
+            if (function == "reverse") return reinterpret_cast<void*>(JArray_Reverse);
+        }
+        else if (klass == "JIntMap") {
+            if (function == "object") return reinterpret_cast<void*>(JIntMap_Object);
+            if (function == "getInt") return reinterpret_cast<void*>(JIntMap_GetInt);
+            if (function == "getFlt") return reinterpret_cast<void*>(JIntMap_GetFlt);
+            if (function == "getObj") return reinterpret_cast<void*>(JIntMap_GetObj);
+            if (function == "getForm") return reinterpret_cast<void*>(JIntMap_GetForm);
+            if (function == "setInt") return reinterpret_cast<void*>(JIntMap_SetInt);
+            if (function == "setFlt") return reinterpret_cast<void*>(JIntMap_SetFlt);
+            if (function == "setObj") return reinterpret_cast<void*>(JIntMap_SetObj);
+            if (function == "setForm") return reinterpret_cast<void*>(JIntMap_SetForm);
+            if (function == "hasKey") return reinterpret_cast<void*>(JIntMap_HasKey);
+            if (function == "valueType") return reinterpret_cast<void*>(JIntMap_ValueType);
+            if (function == "removeKey") return reinterpret_cast<void*>(JIntMap_RemoveKey);
+            if (function == "count") return reinterpret_cast<void*>(JIntMap_Count);
+            if (function == "clear") return reinterpret_cast<void*>(JIntMap_Clear);
+            if (function == "nextKey") return reinterpret_cast<void*>(JIntMap_NextKey);
+            if (function == "getNthKey") return reinterpret_cast<void*>(JIntMap_GetNthKey);
+            if (function == "insertInt") return reinterpret_cast<void*>(JIntMap_InsertInt);
+            if (function == "insertFlt") return reinterpret_cast<void*>(JIntMap_InsertFlt);
+            if (function == "insertObj") return reinterpret_cast<void*>(JIntMap_InsertObj);
+            if (function == "insertForm") return reinterpret_cast<void*>(JIntMap_InsertForm);
+        }
+        else if (klass == "JFormMap") {
+            if (function == "object") return reinterpret_cast<void*>(JFormMap_Object);
+            if (function == "getInt") return reinterpret_cast<void*>(JFormMap_GetInt);
+            if (function == "getFlt") return reinterpret_cast<void*>(JFormMap_GetFlt);
+            if (function == "getObj") return reinterpret_cast<void*>(JFormMap_GetObj);
+            if (function == "getForm") return reinterpret_cast<void*>(JFormMap_GetForm);
+            if (function == "setInt") return reinterpret_cast<void*>(JFormMap_SetInt);
+            if (function == "setFlt") return reinterpret_cast<void*>(JFormMap_SetFlt);
+            if (function == "setObj") return reinterpret_cast<void*>(JFormMap_SetObj);
+            if (function == "setForm") return reinterpret_cast<void*>(JFormMap_SetForm);
+            if (function == "hasKey") return reinterpret_cast<void*>(JFormMap_HasKey);
+            if (function == "valueType") return reinterpret_cast<void*>(JFormMap_ValueType);
+            if (function == "removeKey") return reinterpret_cast<void*>(JFormMap_RemoveKey);
+            if (function == "count") return reinterpret_cast<void*>(JFormMap_Count);
+            if (function == "clear") return reinterpret_cast<void*>(JFormMap_Clear);
+            if (function == "nextKey") return reinterpret_cast<void*>(JFormMap_NextKey);
+            if (function == "getNthKey") return reinterpret_cast<void*>(JFormMap_GetNthKey);
+            if (function == "insertInt") return reinterpret_cast<void*>(JFormMap_InsertInt);
+            if (function == "insertFlt") return reinterpret_cast<void*>(JFormMap_InsertFlt);
+            if (function == "insertObj") return reinterpret_cast<void*>(JFormMap_InsertObj);
+            if (function == "insertForm") return reinterpret_cast<void*>(JFormMap_InsertForm);
+        }
+        else if (klass == "JValue") {
+            if (function == "isExists") return reinterpret_cast<void*>(JValue_IsExists);
+            if (function == "isArray") return reinterpret_cast<void*>(JValue_IsArray);
+            if (function == "isMap") return reinterpret_cast<void*>(JValue_IsMap);
+            if (function == "isFormMap") return reinterpret_cast<void*>(JValue_IsFormMap);
+            if (function == "isIntegerMap") return reinterpret_cast<void*>(JValue_IsIntegerMap);
+            if (function == "empty") return reinterpret_cast<void*>(JValue_Empty);
+            if (function == "count") return reinterpret_cast<void*>(JValue_Count);
+            if (function == "clear") return reinterpret_cast<void*>(JValue_Clear);
+        }
+        return nullptr;
+    }
+
+    const ReflectionInterface g_reflection = { 1, FunctionOfClass };
+    const DomainInterface g_domain = { 1, GetDefaultDomain, GetDomainWithName };
+
+    const void* QueryInterface(uint32_t id) {
+        switch (id) {
+        case 1: return &g_reflection;
+        case 2: return &g_domain;
+        default: return nullptr;
+        }
+    }
+
+    const RootInterface g_root = { 1, QueryInterface };
+}
+
 extern "C" __declspec(dllexport) void* GetJContainersNGAPI() {
     return &g_JContainersNGAPI_V1_Instance;
 }
@@ -381,6 +522,7 @@ void OnSKSEMessage(SKSE::MessagingInterface::Message* msg) {
             // was dispatching on type 1 — that IS kPostPostLoad, so every mod got
             // our api struct as a fake kPostPostLoad event. 'JCNG' is ours alone
             messaging->Dispatch('JCNG', &g_JContainersNGAPI_V1_Instance, sizeof(void*), nullptr);
+            messaging->Dispatch(LegacyJC::kRootInterfaceMessage, const_cast<LegacyJC::RootInterface*>(&LegacyJC::g_root), sizeof(void*), nullptr);
             SKSE::log::info("JContainersNG: root_interface broadcast on 'JCNG'");
         }
     }

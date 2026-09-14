@@ -118,3 +118,14 @@ std::string JString_GenerateUUID(RE::StaticFunctionTag*) {
     }
     return uuid;
 }
+
+int32_t JString_Stoul(RE::StaticFunctionTag*, std::string numberString, int32_t base) {
+    // Papyrus Int is signed. Cast through uint32_t so the OG UInt32 native's
+    // low 32 bits survive even when the high bit is set.
+    try {
+        return static_cast<int32_t>(static_cast<uint32_t>(std::stoul(numberString, nullptr, base)));
+    }
+    catch (const std::exception&) {
+        return 0;
+    }
+}

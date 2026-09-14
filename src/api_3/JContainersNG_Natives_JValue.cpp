@@ -311,8 +311,12 @@ void JValue_WriteToFile(RE::StaticFunctionTag*, Handle obj, std::string filePath
 }
 
 std::string JValue_ToString(RE::StaticFunctionTag*, Handle obj) {
+    return JValue_ToJsonString(nullptr, obj);
+}
+
+std::string JValue_ToJsonString(RE::StaticFunctionTag*, Handle obj) {
     auto ptr = ObjectManager::Get().GetObject(obj);
-    if (!ptr) return "{}";
+    if (!ptr) return "";
     // OG dumps with JSON_INDENT(2) — compact output breaks string compares
     return JsonSerializer::ToExternal(*ptr).dump(2);
 }

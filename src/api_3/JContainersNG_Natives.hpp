@@ -28,6 +28,7 @@ extern Handle JValue_ReadFromDirectory(RE::StaticFunctionTag*, std::string direc
 extern Handle JValue_ObjectFromPrototype(RE::StaticFunctionTag*, std::string prototype);
 extern void JValue_WriteToFile(RE::StaticFunctionTag*, Handle obj, std::string filePath);
 extern std::string JValue_ToString(RE::StaticFunctionTag*, Handle obj);
+extern std::string JValue_ToJsonString(RE::StaticFunctionTag*, Handle obj);
 extern int32_t JValue_SolvedValueType(RE::StaticFunctionTag*, Handle obj, std::string path);
 extern bool JValue_HasPath(RE::StaticFunctionTag*, Handle obj, std::string path);
 extern float JValue_SolveFlt(RE::StaticFunctionTag*, Handle obj, std::string path, float defaultVal);
@@ -278,6 +279,7 @@ extern RE::TESForm* JString_DecodeFormStringToForm(RE::StaticFunctionTag*, std::
 extern std::string JString_EncodeFormToString(RE::StaticFunctionTag*, RE::TESForm* value);
 extern std::string JString_EncodeFormIdToString(RE::StaticFunctionTag*, int32_t formId);
 extern std::string JString_GenerateUUID(RE::StaticFunctionTag*);
+extern int32_t JString_Stoul(RE::StaticFunctionTag*, std::string numberString, int32_t base);
 
 // ============================================================================
 // JContainers
@@ -285,6 +287,11 @@ extern std::string JString_GenerateUUID(RE::StaticFunctionTag*);
 extern bool JContainers_IsInstalled(RE::StaticFunctionTag*);
 extern int32_t JContainers_APIVersion(RE::StaticFunctionTag*);
 extern int32_t JContainers_FeatureVersion(RE::StaticFunctionTag*);
+extern int32_t JContainers_MinorVersion(RE::StaticFunctionTag*);
+extern int32_t JContainers_PatchVersion(RE::StaticFunctionTag*);
+extern int32_t JContainers_VersionInt(RE::StaticFunctionTag*);
+extern std::string JContainers_VersionString(RE::StaticFunctionTag*);
+extern bool JContainers_VersionAtLeast(RE::StaticFunctionTag*, int32_t api, int32_t feature, int32_t minor, int32_t patch);
 extern bool JContainers_FileExistsAtPath(RE::StaticFunctionTag*, std::string path);
 extern std::vector<std::string> JContainers_ContentsOfDirectoryAtPath(RE::StaticFunctionTag*, std::string directoryPath, std::string extension);
 extern void JContainers_RemoveFileAtPath(RE::StaticFunctionTag*, std::string path);

@@ -17,7 +17,36 @@ int32_t JContainers_APIVersion(RE::StaticFunctionTag*) {
 }
 
 int32_t JContainers_FeatureVersion(RE::StaticFunctionTag*) {
+    return 3;
+}
+
+int32_t JContainers_MinorVersion(RE::StaticFunctionTag*) {
     return 2;
+}
+
+int32_t JContainers_PatchVersion(RE::StaticFunctionTag*) {
+    return 0;
+}
+
+int32_t JContainers_VersionInt(RE::StaticFunctionTag*) {
+    return JContainers_APIVersion(nullptr) * 1000000
+        + JContainers_FeatureVersion(nullptr) * 10000
+        + JContainers_MinorVersion(nullptr) * 100
+        + JContainers_PatchVersion(nullptr);
+}
+
+std::string JContainers_VersionString(RE::StaticFunctionTag*) {
+    return "4.3.2.0";
+}
+
+bool JContainers_VersionAtLeast(RE::StaticFunctionTag*, int32_t api, int32_t feature, int32_t minor, int32_t patch) {
+    // OG receives UInt32 values. Keep that conversion even though Papyrus
+    // exposes its only integer type as signed.
+    const uint64_t requested = static_cast<uint64_t>(static_cast<uint32_t>(api)) * 1000000u
+        + static_cast<uint64_t>(static_cast<uint32_t>(feature)) * 10000u
+        + static_cast<uint64_t>(static_cast<uint32_t>(minor)) * 100u
+        + static_cast<uint32_t>(patch);
+    return static_cast<uint64_t>(JContainers_VersionInt(nullptr)) >= requested;
 }
 
 bool JContainers_FileExistsAtPath(RE::StaticFunctionTag*, std::string path) {
